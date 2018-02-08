@@ -1,0 +1,126 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(knitr)
+library(plotly)
+
+setwd("~/Desktop/INFO201/a6-mapping-shootings-EmilyCheoh")
+
+shooting.data <- read.csv('data/shootings-2016.csv', stringsAsFactors=FALSE)
+```
+
+
+```{r, echo=FALSE}
+# How many shootings occurred?
+total.shooting <- nrow(shooting.data)
+
+# How many lives were lost?
+killed <- shooting.data %>% select(killed) %>% 
+  sum()
+
+# Which cities that were most affected?
+# City with most injuried or killed
+most.affected.city <- shooting.data %>% filter(injured + killed == max(injured + killed)) %>% 
+  select(city)
+
+# Insight of choice
+# Which state that most people got killed, and how many people got killed
+most.state <- shooting.data %>% group_by(state) %>% 
+  summarise(kills = sum(killed)) %>% 
+  filter(kills == max(kills))
+```
+# 2016 MASS SHOOTING DATA
+
+## Summary Information
+
+`r total.shooting` shootings occurred in 2016.
+`r killed` people died.
+`r most.affected.city` was the city which was most affected by shooting (most casualties).
+`r most.state$state` was the state where most people got killed, `r most.state$kills` people died from shootings.
+
+
+```{r, echo=FALSE}
+# Summary Table 
+sum.table <- shooting.data %>% group_by(state) %>%
+  summarise(occurance = n(), injured = sum(injured), killed = sum(killed)) %>%
+  arrange(-occurance)
+table <- sum.table %>% kable()
+```
+
+## Summary Table 
+
+`r table`
+Above is a summary table of each state's shooting statistics sorted by the # of occurance. Some states are not on the table because no shooting had occurred. As we can see, shootings happen most often in `r sum.table$state[1]`.
+
+``` {r echo=FALSE}
+orlando.2016 <- shooting.data %>% filter(killed == max(killed))
+```
+
+## 2016 Orlando Nightclub Shooting
+
+On `r orlando.2016$date`, a mass shooting happened at a gay nightclub at `r orlando.2016$city`. `r  orlando.2016$injured` people were injured while `r orlando.2016$killed` were killed. According to CNN, this incident was "the deadliest mass shooting in the United States and the nation's worst terror attack since 9/11". ISIS claimed responsibility for it. For more information, go to [2016 Orlando nightclub shooting's Wikipedia page](https://en.wikipedia.org/wiki/2016_Orlando_nightclub_shooting).
+
+``` {r echo=FALSE}
+#interactive map
+shooting.data$casualties <- shooting.data %>% with(killed + injured)
+
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showland = TRUE,
+  landcolor = toRGB("gray85"),
+  subunitwidth = 1,
+  countrywidth = 1,
+  subunitcolor = toRGB("white"),
+  countrycolor = toRGB("white")
+)
+
+p <- plot_geo(shooting.data, locationmode = 'USA-states', sizes = c(1, 250)) %>%
+  add_markers(
+    x = ~lng, y = ~lat, size = ~casualties, color = ~casualties, hoverinfo = "text",
+    text = ~paste0("Date: ", shooting.data$date, "<br />Location: ", shooting.data$city, ", ", shooting.data$state,
+                  "<br />Injured: ", shooting.data$injured, "<br />Killed: ", shooting.data$killed)
+  ) %>%
+  layout(title = '2016 US Mass Shooting Data', geo = g)
+
+```
+
+## An Interactive Map of 2016's Mass Shooting Data
+
+Below is a map of 2016's mass shooting data. The bigger and yellower the circle is, the heavier casualties (killed + injured) were. You can hover your mouse over the circle to view the statistics of that incident.
+
+`r p`
+
+``` {r echo=FALSE}
+# HAS Orlando Nightclub Shooting
+# regression line
+fit = lm(killed ~ injured, data = shooting.data)
+# plot
+with.orlando <- plot_ly(data = shooting.data, x = ~injured) %>%
+  layout(title = 'Relationship between # of Ppl Injured and # of Ppl Killed in Shootings') %>%
+  add_markers(y = ~killed, name = "incidence", size = ~casualties) %>% 
+  add_lines(x = ~injured, y = fitted(fit), name = "regression")
+
+# NO Orlando Nightclub Shooting
+data.without.orlando.shooting <- shooting.data %>% filter(!injured == max(injured))
+# regression line
+fit = lm(killed ~ injured, data = data.without.orlando.shooting)
+# plot
+no.orlando <- plot_ly(data = data.without.orlando.shooting, x = ~injured) %>%
+  layout(title = 'Relationship between # of Ppl Injured and # of Ppl Killed in Shootings') %>%
+  add_markers(y = ~killed, name = "incidence", size = ~casualties) %>% 
+  add_lines(x = ~injured, y = fitted(fit), name = "regression")
+```
+
+## Relationship between # of Ppl Injured and # of Ppl Killed in Shootings
+
+To better analyze the relationship, we need to first remove the Orlando Nightclub incidence because, as shown by the graph, it will largely skew the regression line. 
+
+`r with.orlando`
+
+After removing the outlier, we can see there is a negetive relationship bewteen the number of people got injured and the number of people got killed. 
+
+`r no.orlando`
+
+This relationship gives us an insight that when offenders are about to shoot, they may already have planned in mind that whether they just want to kill or to hurt as much people as possible. There is also a probability that the negative relationship is becasue of the offenders' shooting skills; therefore, further investigation is needed. 
