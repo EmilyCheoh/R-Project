@@ -1,0 +1,127 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("httr")
+library("jsonlite")
+library("knitr")
+library("dplyr")
+base.uri <- "https://congress.api.sunlightfoundation.com"
+zipcode <- "98105"
+```
+
+```{r, echo=FALSE}
+# find and report the district
+resource <- "/districts/locate"
+district.uri = paste0(base.uri, resource)
+query.params <- list(zip = zipcode)
+#get the district
+response <- GET(district.uri, query = query.params)
+district.info <- fromJSON(content(response, "text"))
+district.result <- district.info$results
+congressional.district<- district.result$district
+```
+
+## Find and Report Your District
+
+The congressional district correspond to zipcode `r zipcode` is the Congressional District `r congressional.district`.
+
+```{r, echo=FALSE}
+# Representatives Table
+resource <- "/legislators/locate"
+representatives.uri = paste0(base.uri, resource)
+query.params <- list(zip = zipcode)
+# get the representatives
+response <- GET(representatives.uri, query = query.params)
+representatives.info <- fromJSON(content(response, "text"))
+representatives.result <- representatives.info$results
+websites <- paste0("[link](", representatives.result$website, ")")
+twitters <- paste0("[link](https://twitter.com/", representatives.result$twitter_id, ")")
+representatives.df <- as.data.frame(representatives.result, stringsAsFactors = FALSE) 
+info.kable <- mutate(representatives.df, Website = websites, Twitter = twitters) %>% 
+  select(first_name, last_name, title, party, chamber, phone, Website, Twitter) %>%
+  kable(col.names = c("First name", "Last name", "Title", "Party", "Chamber", "Phone", "Website", "Twitter"))
+
+```
+
+## Representatives Table
+
+`r info.kable`
+
+```{r, echo=FALSE}
+# Committee Information
+CommitteeInformation <- function(representatives.id) {
+  resource <- "/committees"
+  uri = paste0(base.uri, resource)
+  query.params <- list(member_ids = representatives.id)
+  response <- GET(uri, query = query.params)
+  committee.info <- fromJSON(content(response, "text"))
+  committee.df <- committee.info$results %>% as.data.frame(stringsAsFactors = FALSE) %>%
+    mutate(bioguide_id = representatives.id) # so that I can join easily
+  return(committee.df)
+}
+
+summary.df <- lapply(representatives.df$bioguide_id, CommitteeInformation) %>% 
+  bind_rows() %>%
+  left_join(representatives.df, by = c("bioguide_id")) %>%
+  group_by(bioguide_id)
+
+# for plotting
+n.committees <- summary.df %>% 
+  select(first_name, last_name, bioguide_id) %>% 
+  count(bioguide_id, first_name, last_name) %>%
+  arrange(n)
+```
+
+## Summrasied Committee Information
+
+```{r, echo=FALSE}
+par(mar=c(5, 8, 4, 2))
+Committee.plot <- barplot(n.committees$n, main="Committees Served on by Each Rep", horiz=TRUE,las = 1,
+                         xlab="# Committees", names.arg=c(paste(n.committees$first_name, n.committees$last_name)))
+```
+
+
+```{r, echo=FALSE}
+# In-depth Committee Information
+committee.chosen <- summary.df %>% 
+  ungroup() %>%
+  filter(subcommittee == FALSE) %>% 
+  select(committee_id, bioguide_id, first_name, last_name, name) %>%
+  slice(1) # committee: HSBU, rep: Pramila Jayapal
+resource <- "/committees"
+query.params = list(committee_id=committee.chosen$committee_id, fields="members")
+uri = paste0(base.uri, resource)
+response <- GET(uri, query = query.params)
+body <- fromJSON(content(response,"text"))$results$members[[1]] %>% flatten()
+
+#Who is the chair of the committee (first and last name)?
+chair <- body %>% filter(title == "Chair") %>% 
+  select(legislator.first_name, legislator.last_name)
+chair.name <- paste(chair$legislator.first_name, chair$legislator.last_name)
+
+#How many people are on the committee?
+num.people <- body %>% nrow()
+
+#Is your representative on the majority or minority side of the committee?
+major.or.minor <- body %>% filter(legislator.bioguide_id == committee.chosen$bioguide_id) %>%
+  select(side)
+
+# What is the gender distribution on the committee (%M, %F)
+female <- body %>% filter(legislator.gender == "F") %>% count()
+female.percentage <- paste0(round((female / num.people) * 100), "%")
+male <- body %>% filter(legislator.gender == "M") %>% count()
+male.percentage <- paste0(round((male / num.people) * 100), "%")
+```
+
+## More Information about the Committee 
+
+The committee is `r committee.chosen$name`,
+the chair of the committee is `r chair.name`.
+The representative (`r paste(committee.chosen$first_name, committee.chosen$last_name)`) is on the `r major.or.minor` side of the committee.
+
+_(some information about the committee from Wikipedia)_
+The U.S. House Committee on the Budget, commonly known as the House Budget Committee, is a standing committee of the United States House of Representatives. Its responsibilities include legislative oversight of the federal budget process, reviewing all bills and resolutions on the budget, and monitoring agencies and programs funded outside of the budgetary process. The committee briefly operated as a select committee in 1919 and 1921, during the 66th and 67th Congresses, before being made a standing committee in 1974.
+
+`r female.percentage` of the committee are female, `r male.percentage` of the  committee are male.
+
+
+
