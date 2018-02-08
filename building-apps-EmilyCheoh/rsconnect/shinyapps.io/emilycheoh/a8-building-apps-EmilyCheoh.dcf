@@ -1,0 +1,11 @@
+name: a8-building-apps-EmilyCheoh
+title: a8-building-apps-EmilyCheoh
+account: emilycheoh
+server: shinyapps.io
+appId: 182716
+bundleId: 838348
+url: https://emilycheoh.shinyapps.io/a8-building-apps-EmilyCheoh/
+when: 1495569786.82221
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|LICENSE|README.md|data/.DS_Store
