@@ -1,3 +1,3 @@
-# a3-using-data
+# using-data
 
-Completed the instructions in the `assignment.R` file to demonstrate foundational skills of working with data in R.
+Demonstrated foundational skills of working with data in R.
